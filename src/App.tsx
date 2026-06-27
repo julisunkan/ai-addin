@@ -590,9 +590,6 @@ export default function App() {
               <span className="text-[10px] font-bold text-emerald-700">Unlocked</span>
             </div>
           )}
-          <a href="/admin" data-testid="link-admin" className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted">
-            Admin
-          </a>
         </div>
       </header>
 
