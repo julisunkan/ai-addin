@@ -120,9 +120,10 @@ function timeAgo(ts: number): string {
 interface PaywallProps {
   onUnlocked: () => void;
   initialTab?: "pay" | "key";
+  isRenewal?: boolean;
 }
 
-function Paywall({ onUnlocked, initialTab = "pay" }: PaywallProps) {
+function Paywall({ onUnlocked, initialTab = "pay", isRenewal = false }: PaywallProps) {
   const [tab, setTab] = useState<"pay" | "key">(initialTab);
   const [payConfig, setPayConfig] = useState<{ address: string; network: string; price: number } | null>(null);
   const [payConfigError, setPayConfigError] = useState("");
@@ -182,12 +183,16 @@ function Paywall({ onUnlocked, initialTab = "pay" }: PaywallProps) {
 
   return (
     <div className="rounded-2xl border border-indigo-200 bg-gradient-to-b from-indigo-50 to-white overflow-hidden shadow-lg">
-      <div className="bg-indigo-600 px-5 py-4 text-white">
+      <div className={`px-5 py-4 text-white ${isRenewal ? "bg-amber-600" : "bg-indigo-600"}`}>
         <div className="flex items-center gap-2.5 mb-1">
-          <Lock className="w-5 h-5 opacity-90" />
-          <h3 className="font-bold text-base">Unlock Your Formula</h3>
+          {isRenewal ? <RotateCcw className="w-5 h-5 opacity-90" /> : <Lock className="w-5 h-5 opacity-90" />}
+          <h3 className="font-bold text-base">{isRenewal ? "Renew Your Access" : "Unlock Your Formula"}</h3>
         </div>
-        <p className="text-xs text-indigo-200">1 USDT / month — unlock all generated formulas & premium tools</p>
+        <p className="text-xs text-white/80">
+          {isRenewal
+            ? "Your license has expired. Pay 1 USDT to get another 30 days of access."
+            : "1 USDT / month — unlock all generated formulas & premium tools"}
+        </p>
       </div>
 
       <div className="flex border-b border-indigo-100">
@@ -685,18 +690,24 @@ export default function App() {
   const [model, setModel]             = useState(MODELS[0].value);
 
   // License / paywall
-  const [isUnlocked, setIsUnlocked]   = useState(false);
-  const [paywallOpen, setPaywallOpen] = useState(false);
-  const [paywallTab, setPaywallTab]   = useState<"pay" | "key">("pay");
+  const [isUnlocked, setIsUnlocked]     = useState(false);
+  const [licenseExpired, setLicenseExpired] = useState(false);
+  const [paywallOpen, setPaywallOpen]   = useState(false);
+  const [paywallTab, setPaywallTab]     = useState<"pay" | "key">("pay");
+  const [isRenewal, setIsRenewal]       = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
 
   // Check for existing license on load
   useEffect(() => {
     const key = getLicense();
     if (key) {
-      checkLicenseValid(key).then(valid => {
-        setIsUnlocked(valid);
-        if (!valid) clearLicense();
+      checkLicenseValid(key).then(status => {
+        if (status.valid) {
+          setIsUnlocked(true);
+        } else {
+          clearLicense();
+          if (status.expired) setLicenseExpired(true);
+        }
       });
     }
   }, []);
@@ -746,11 +757,20 @@ export default function App() {
 
   function handleUnlocked() {
     setIsUnlocked(true);
+    setLicenseExpired(false);
     setPaywallOpen(false);
+    setIsRenewal(false);
   }
 
   function openPaywall(tab: "pay" | "key") {
     setPaywallTab(tab);
+    setIsRenewal(false);
+    setPaywallOpen(true);
+  }
+
+  function openRenewal() {
+    setPaywallTab("pay");
+    setIsRenewal(true);
     setPaywallOpen(true);
   }
 
@@ -805,6 +825,14 @@ export default function App() {
               <Unlock className="w-3 h-3 text-emerald-600 group-hover:text-red-500 transition-colors" />
               <span className="text-[10px] font-bold text-emerald-700 group-hover:text-red-600 transition-colors">Licensed</span>
             </button>
+          ) : licenseExpired ? (
+            <button
+              onClick={openRenewal}
+              className="flex items-center gap-1.5 bg-amber-50 border border-amber-300 rounded-full px-2.5 py-1 hover:bg-amber-100 transition-colors"
+            >
+              <RotateCcw className="w-3 h-3 text-amber-600" />
+              <span className="text-[10px] font-bold text-amber-700">Renew</span>
+            </button>
           ) : (
             <button
               onClick={() => openPaywall("key")}
@@ -816,6 +844,22 @@ export default function App() {
           )}
         </div>
       </header>
+
+      {/* Expired license banner */}
+      {licenseExpired && !isUnlocked && (
+        <div className="shrink-0 flex items-center justify-between gap-2 bg-amber-50 border-b border-amber-200 px-4 py-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <RotateCcw className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <p className="text-xs text-amber-800 font-medium truncate">Your license has expired</p>
+          </div>
+          <button
+            onClick={openRenewal}
+            className="shrink-0 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 transition-colors rounded-full px-3 py-1"
+          >
+            Renew now
+          </button>
+        </div>
+      )}
 
       {/* Tab label bar */}
       <div className="shrink-0 bg-gray-50 border-b border-border px-4 py-2 flex items-center gap-2">
@@ -994,15 +1038,17 @@ export default function App() {
                 <div>
                   <div className="flex items-center gap-2 mb-3">
                     <div className="flex-1 h-px bg-border" />
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-2">Unlock Access</span>
+                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider px-2">
+                      {isRenewal ? "Renew Access" : "Unlock Access"}
+                    </span>
                     <div className="flex-1 h-px bg-border" />
                   </div>
-                  <Paywall onUnlocked={handleUnlocked} initialTab={paywallTab} />
+                  <Paywall onUnlocked={handleUnlocked} initialTab={paywallTab} isRenewal={isRenewal} />
                   <button
                     onClick={() => setPaywallOpen(false)}
                     className="mt-2 w-full text-xs text-muted-foreground hover:text-foreground py-2 transition-colors"
                   >
-                    Hide paywall (formula stays blurred)
+                    {isRenewal ? "Dismiss" : "Hide paywall (formula stays blurred)"}
                   </button>
                 </div>
               )}

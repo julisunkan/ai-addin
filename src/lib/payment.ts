@@ -53,24 +53,33 @@ export async function verifyPayment(
   }
 }
 
-export async function checkLicenseValid(licenseKey: string): Promise<boolean> {
+export interface LicenseStatus {
+  valid: boolean;
+  expired: boolean;
+  issuedAt?: string | null;
+}
+
+export async function checkLicenseValid(licenseKey: string): Promise<LicenseStatus> {
   try {
     const res = await fetch(apiUrl(`/check/${encodeURIComponent(licenseKey)}`));
-    if (!res.ok) return false;
+    if (!res.ok) return { valid: false, expired: false };
     const data = await res.json();
-    return data.valid === true;
+    if (data.valid) return { valid: true, expired: false, issuedAt: data.issuedAt ?? null };
+    if (data.reason === "expired") return { valid: false, expired: true };
+    return { valid: false, expired: false };
   } catch {
-    return false;
+    return { valid: false, expired: false };
   }
 }
 
 export async function activateLicenseKey(key: string): Promise<{ success: boolean; error?: string }> {
   const trimmed = key.trim().toUpperCase();
   if (!trimmed) return { success: false, error: "Please enter a license key." };
-  const valid = await checkLicenseValid(trimmed);
-  if (valid) {
+  const status = await checkLicenseValid(trimmed);
+  if (status.valid) {
     setLicense(trimmed);
     return { success: true };
   }
-  return { success: false, error: "Invalid or expired license key. Check the key and try again." };
+  if (status.expired) return { success: false, error: "This license key has expired. Please renew your subscription." };
+  return { success: false, error: "Invalid license key. Check the key and try again." };
 }
