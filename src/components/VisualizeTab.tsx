@@ -1,9 +1,10 @@
 import { useState, useCallback, useRef } from "react";
+import html2canvas from "html2canvas";
 import {
   Upload, BarChart2, LineChart, PieChart, ScatterChart,
   AreaChart, Loader2, AlertCircle, Sparkles, RefreshCw,
-  FileSpreadsheet, ChevronDown, ChevronUp, Check, X,
-  Table, TrendingUp, Layers
+  FileSpreadsheet, ChevronDown, ChevronUp, Check,
+  Table, TrendingUp, Download, ImageDown
 } from "lucide-react";
 import {
   BarChart, Bar, LineChart as ReLineChart, Line, AreaChart as ReAreaChart, Area,
@@ -267,6 +268,8 @@ export default function VisualizeTab() {
   const [insights, setInsights]           = useState<AIInsights | null>(null);
   const [insightsError, setInsightsError] = useState("");
   const [showInsights, setShowInsights]   = useState(false);
+  const [exporting, setExporting]         = useState(false);
+  const chartRef = useRef<HTMLDivElement>(null);
 
   const sheetData: SheetData | null = workbook ? workbook.sheetData[activeSheet] : null;
   const columns = sheetData?.columns ?? [];
@@ -354,6 +357,27 @@ export default function VisualizeTab() {
       setInsightsError("Network error — check your connection.");
     } finally {
       setLoadingInsights(false);
+    }
+  }
+
+  async function handleDownloadPNG() {
+    if (!chartRef.current) return;
+    setExporting(true);
+    try {
+      const canvas = await html2canvas(chartRef.current, {
+        backgroundColor: "#ffffff",
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const link = document.createElement("a");
+      link.download = `${(chartTitle || "chart").replace(/\s+/g, "-").toLowerCase()}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.error("Chart export failed:", err);
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -504,7 +528,7 @@ export default function VisualizeTab() {
       </div>
 
       {/* Chart display */}
-      <div className="bg-white border border-border rounded-2xl p-4 shadow-sm">
+      <div ref={chartRef} className="bg-white border border-border rounded-2xl p-4 shadow-sm">
         <ChartRenderer
           type={chartType}
           data={rows}
@@ -513,6 +537,20 @@ export default function VisualizeTab() {
           title={chartTitle}
         />
       </div>
+
+      {/* Download PNG button — only shown when chart has data */}
+      {xColumn && yColumns.length > 0 && rows.length > 0 && (
+        <button
+          onClick={handleDownloadPNG}
+          disabled={exporting}
+          data-testid="button-download-chart-png"
+          className="w-full flex items-center justify-center gap-2 bg-white border border-border rounded-xl py-2.5 text-sm font-bold text-foreground hover:border-indigo-300 hover:bg-indigo-50 hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+        >
+          {exporting
+            ? <><Loader2 className="w-4 h-4 animate-spin text-indigo-500" /> Exporting…</>
+            : <><ImageDown className="w-4 h-4" /> Download Chart as PNG</>}
+        </button>
+      )}
 
       {/* AI Insights button */}
       <div className="space-y-2">
