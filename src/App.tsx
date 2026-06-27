@@ -657,7 +657,14 @@ export default function App() {
             </div>
           )}
 
-          <div className="h-4" />
+          {/* Footer */}
+          <div className="flex items-center justify-center gap-4 pt-2 pb-4">
+            <a href="/support" className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">Support</a>
+            <span className="text-muted-foreground/30 text-[10px]">·</span>
+            <a href="/eula"    className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">EULA</a>
+            <span className="text-muted-foreground/30 text-[10px]">·</span>
+            <a href="/privacy" className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">Privacy</a>
+          </div>
         </div>
       </div>
     </div>
