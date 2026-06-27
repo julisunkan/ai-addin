@@ -1,9 +1,18 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Sparkles, Copy, Check, Download, FileText, Lock, Unlock,
-  ChevronDown, ChevronUp, Loader2, AlertCircle, X, ExternalLink,
-  KeyRound, CreditCard, RefreshCw, Shield, Zap
+  ChevronDown, ChevronUp, Loader2, AlertCircle, X,
+  KeyRound, CreditCard, Shield, Zap, TableIcon
 } from "lucide-react";
+
+// Office.js globals — available inside Excel, undefined in browser
+declare const Office: { context: unknown } | undefined;
+declare const Excel: {
+  run: (fn: (ctx: {
+    workbook: { getSelectedRange: () => { formulas: string[][]; load: (s: string) => void } };
+    sync: () => Promise<void>;
+  }) => Promise<void>) => Promise<void>;
+} | undefined;
 import { getLicense, setLicense, clearLicense, checkLicenseValid, fetchPaymentConfig, verifyPayment, activateLicenseKey } from "./lib/payment";
 import { exportToTxt, exportToPdf, type FormulaResult } from "./lib/formulaExport";
 import { useAppConfig } from "./context/AppConfigContext";
@@ -245,14 +254,87 @@ interface FormulaDisplayProps {
   onRequestUnlock: (tab: "pay" | "key") => void;
 }
 
+// Returns true only when running inside Excel with the Office.js SDK loaded
+function isInExcel(): boolean {
+  try {
+    return (
+      typeof Office !== "undefined" &&
+      Office !== null &&
+      typeof Excel !== "undefined" &&
+      Excel !== null &&
+      (Office as { context: unknown }).context !== undefined &&
+      (Office as { context: unknown }).context !== null
+    );
+  } catch {
+    return false;
+  }
+}
+
+type InsertStatus = "idle" | "inserting" | "success" | "copied" | "error";
+
 function FormulaDisplay({ result, description, isUnlocked, onRequestUnlock }: FormulaDisplayProps) {
   const { copied, copy } = useCopyText();
   const [showBreakdown, setShowBreakdown] = useState(true);
+  const [insertStatus, setInsertStatus] = useState<InsertStatus>("idle");
+  const [insertError, setInsertError] = useState("");
+  const inExcel = isInExcel();
 
   function handleCopy() {
     if (!isUnlocked) { onRequestUnlock("pay"); return; }
     copy(result.formula);
   }
+
+  async function handleInsert() {
+    if (!isUnlocked) { onRequestUnlock("pay"); return; }
+
+    setInsertStatus("inserting");
+    setInsertError("");
+
+    // If running in Excel, use Office.js to insert into the selected cell
+    if (inExcel) {
+      try {
+        await Excel!.run(async (ctx) => {
+          const range = ctx.workbook.getSelectedRange();
+          range.formulas = [[result.formula]];
+          await ctx.sync();
+        });
+        setInsertStatus("success");
+        setTimeout(() => setInsertStatus("idle"), 2500);
+      } catch (err) {
+        console.error("Excel insert failed:", err);
+        setInsertError("Could not insert — make sure a cell is selected in Excel.");
+        setInsertStatus("error");
+        setTimeout(() => { setInsertStatus("idle"); setInsertError(""); }, 4000);
+      }
+    } else {
+      // Fallback: copy to clipboard with a note
+      navigator.clipboard.writeText(result.formula).then(() => {
+        setInsertStatus("copied");
+        setTimeout(() => setInsertStatus("idle"), 2500);
+      });
+    }
+  }
+
+  const insertLabel = () => {
+    if (!isUnlocked) return <><Lock className="w-3.5 h-3.5" /> Insert</>;
+    switch (insertStatus) {
+      case "inserting": return <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Inserting…</>;
+      case "success":   return <><Check className="w-3.5 h-3.5" /> Inserted!</>;
+      case "copied":    return <><Check className="w-3.5 h-3.5" /> Copied!</>;
+      case "error":     return <><AlertCircle className="w-3.5 h-3.5" /> Failed</>;
+      default:          return <><TableIcon className="w-3.5 h-3.5" /> {inExcel ? "Insert into Cell" : "Insert"}</>;
+    }
+  };
+
+  const insertBtnClass = () => {
+    if (!isUnlocked) return "bg-gray-100 text-gray-500 cursor-pointer hover:bg-gray-200";
+    switch (insertStatus) {
+      case "success": return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+      case "copied":  return "bg-emerald-50 text-emerald-700 border border-emerald-200";
+      case "error":   return "bg-red-50 text-red-600 border border-red-200";
+      default:        return "bg-emerald-600 text-white hover:bg-emerald-700 shadow-sm shadow-emerald-200";
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -260,20 +342,50 @@ function FormulaDisplay({ result, description, isUnlocked, onRequestUnlock }: Fo
       <div>
         <div className="flex items-center justify-between mb-2">
           <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Excel Formula</p>
-          <button
-            onClick={handleCopy}
-            data-testid="button-copy-formula"
-            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
-              isUnlocked
-                ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
-                : "bg-gray-100 text-gray-500 cursor-pointer hover:bg-gray-200"
-            }`}
-          >
-            {isUnlocked
-              ? copied ? <><Check className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy</>
-              : <><Lock className="w-3.5 h-3.5" /> Copy</>}
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* Insert into Cell — primary CTA */}
+            <button
+              onClick={handleInsert}
+              disabled={insertStatus === "inserting"}
+              data-testid="button-insert-formula"
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed ${insertBtnClass()}`}
+            >
+              {insertLabel()}
+            </button>
+            {/* Copy */}
+            <button
+              onClick={handleCopy}
+              data-testid="button-copy-formula"
+              className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors ${
+                isUnlocked
+                  ? "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                  : "bg-gray-100 text-gray-500 cursor-pointer hover:bg-gray-200"
+              }`}
+            >
+              {isUnlocked
+                ? copied ? <><Check className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy</>
+                : <><Lock className="w-3.5 h-3.5" /> Copy</>}
+            </button>
+          </div>
         </div>
+        {/* Insert error message */}
+        {insertStatus === "error" && insertError && (
+          <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2">
+            <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {insertError}
+          </div>
+        )}
+        {/* "Copied to clipboard" note when not in Excel */}
+        {insertStatus === "copied" && !inExcel && (
+          <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-2">
+            <Check className="w-3.5 h-3.5 shrink-0" /> Formula copied to clipboard. Open Excel and paste it into a cell.
+          </div>
+        )}
+        {/* Success: inserted into Excel */}
+        {insertStatus === "success" && (
+          <div className="flex items-center gap-2 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mb-2">
+            <Check className="w-3.5 h-3.5 shrink-0" /> Formula inserted into the selected cell!
+          </div>
+        )}
         <div className={`relative rounded-xl border-2 border-indigo-200 bg-indigo-50 px-4 py-3.5 transition-all ${!isUnlocked ? "select-none" : ""}`}>
           <code
             data-testid="text-formula"
