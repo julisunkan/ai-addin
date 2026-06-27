@@ -27,7 +27,7 @@ export default function EulaPage() {
 
         <section className="space-y-2">
           <h3 className="font-bold text-base">2. License Grant</h3>
-          <p>Upon payment of the one-time license fee (1 USDT), you are granted a non-exclusive, non-transferable, worldwide license to use the Software for personal or commercial purposes. The license key issued to you is valid for the duration stated at the time of purchase (or lifetime if no expiry is specified).</p>
+          <p>Upon payment of the monthly subscription fee (1 USDT/month), you are granted a non-exclusive, non-transferable, worldwide license to use the Software for personal or commercial purposes for a period of 30 days from the date of payment. Access expires at the end of each billing period and must be renewed to continue use.</p>
         </section>
 
         <section className="space-y-2">

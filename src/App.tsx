@@ -187,7 +187,7 @@ function Paywall({ onUnlocked, initialTab = "pay" }: PaywallProps) {
           <Lock className="w-5 h-5 opacity-90" />
           <h3 className="font-bold text-base">Unlock Your Formula</h3>
         </div>
-        <p className="text-xs text-indigo-200">Pay once — get lifetime access to all generated formulas & premium tools</p>
+        <p className="text-xs text-indigo-200">1 USDT / month — unlock all generated formulas & premium tools</p>
       </div>
 
       <div className="flex border-b border-indigo-100">

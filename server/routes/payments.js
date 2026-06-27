@@ -56,11 +56,14 @@ function txAlreadyUsed(txHash) {
 
 function saveLicense(licenseKey, txHash, email) {
   const licenses = loadLicenses();
+  const expiresAt = new Date();
+  expiresAt.setDate(expiresAt.getDate() + 30);
   licenses.push({
     licenseKey,
     txHash,
-    issuedAt: new Date().toISOString(),
-    email:    email ?? null,
+    issuedAt:  new Date().toISOString(),
+    expiresAt: expiresAt.toISOString(),
+    email:     email ?? null,
   });
   saveLicenses(licenses);
 }
@@ -147,7 +150,8 @@ router.post("/verify", async (req, res) => {
   saveLicense(licenseKey, txHash, cleanEmail);
   console.log(`✅ License issued: ${licenseKey}`);
 
-  notifyNewLicense({ licenseKey, planLabel: "Lifetime", planId: "lifetime", expiresAt: null, txHash, network: cfg.network })
+  const expiresAt = new Date(); expiresAt.setDate(expiresAt.getDate() + 30);
+  notifyNewLicense({ licenseKey, planLabel: "Monthly", planId: "monthly", expiresAt: expiresAt.toISOString(), txHash, network: cfg.network })
     .catch(err => console.warn("[notify] error:", err.message));
 
   res.json({ licenseKey });
