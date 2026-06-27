@@ -1077,7 +1077,6 @@ export default function App() {
                   </div>
                   <div className="text-center space-y-1">
                     <p className="text-sm font-bold text-foreground">Generating Formula…</p>
-                    <p className="text-xs text-muted-foreground">Powered by Groq AI</p>
                   </div>
                   <div className="flex gap-1.5">
                     <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
