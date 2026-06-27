@@ -2,7 +2,8 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Sparkles, Copy, Check, Download, FileText, Lock, Unlock,
   ChevronDown, ChevronUp, Loader2, AlertCircle, X,
-  KeyRound, CreditCard, Shield, Zap, TableIcon
+  KeyRound, CreditCard, Shield, Zap, TableIcon,
+  Clock, Trash2, RotateCcw
 } from "lucide-react";
 
 // Office.js globals — available inside Excel, undefined in browser
@@ -498,10 +499,151 @@ function FormulaDisplay({ result, description, isUnlocked, onRequestUnlock }: Fo
   );
 }
 
+// ── Formula History ───────────────────────────────────────────────────────────
+
+const HISTORY_KEY = "aifg_history";
+const HISTORY_MAX = 10;
+
+interface HistoryEntry {
+  id: string;
+  description: string;
+  result: FormulaResult;
+  savedAt: number;
+}
+
+function useFormulaHistory() {
+  const [history, setHistory] = useState<HistoryEntry[]>(() => {
+    try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]"); }
+    catch { return []; }
+  });
+
+  function save(entries: HistoryEntry[]) {
+    setHistory(entries);
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(entries));
+  }
+
+  function addToHistory(description: string, result: FormulaResult) {
+    setHistory(prev => {
+      const deduped = prev.filter(e => e.result.formula !== result.formula);
+      const next = [
+        { id: Date.now().toString(), description, result, savedAt: Date.now() },
+        ...deduped,
+      ].slice(0, HISTORY_MAX);
+      localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+      return next;
+    });
+  }
+
+  function removeFromHistory(id: string) {
+    save(history.filter(e => e.id !== id));
+  }
+
+  function clearHistory() {
+    save([]);
+  }
+
+  return { history, addToHistory, removeFromHistory, clearHistory };
+}
+
+function timeAgo(ts: number): string {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60)  return "just now";
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+interface HistoryPanelProps {
+  history: HistoryEntry[];
+  onLoad: (entry: HistoryEntry) => void;
+  onRemove: (id: string) => void;
+  onClear: () => void;
+}
+
+function HistoryPanel({ history, onLoad, onRemove, onClear }: HistoryPanelProps) {
+  const [open, setOpen] = useState(true);
+
+  if (history.length === 0) return null;
+
+  return (
+    <div className="border border-border rounded-xl bg-white overflow-hidden">
+      {/* Header */}
+      <button
+        onClick={() => setOpen(v => !v)}
+        data-testid="button-history-toggle"
+        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+            Recent Formulas
+          </span>
+          <span className="bg-indigo-100 text-indigo-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+            {history.length}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={e => { e.stopPropagation(); onClear(); }}
+            data-testid="button-history-clear"
+            className="text-[10px] text-muted-foreground hover:text-red-600 transition-colors flex items-center gap-1"
+          >
+            <Trash2 className="w-3 h-3" /> Clear all
+          </button>
+          {open ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+        </div>
+      </button>
+
+      {/* List */}
+      {open && (
+        <div className="divide-y divide-border">
+          {history.map((entry) => (
+            <div
+              key={entry.id}
+              data-testid={`history-item-${entry.id}`}
+              className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50 transition-colors group"
+            >
+              {/* Main info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground truncate">
+                  {entry.description}
+                </p>
+                <code className="text-[11px] text-indigo-700 font-mono truncate block mt-0.5">
+                  {entry.result.formula}
+                </code>
+                <p className="text-[10px] text-muted-foreground mt-1">{timeAgo(entry.savedAt)}</p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                <button
+                  onClick={() => onLoad(entry)}
+                  data-testid={`button-history-load-${entry.id}`}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 rounded-lg px-2.5 py-1 transition-colors"
+                >
+                  <RotateCcw className="w-3 h-3" /> Load
+                </button>
+                <button
+                  onClick={() => onRemove(entry.id)}
+                  data-testid={`button-history-remove-${entry.id}`}
+                  className="text-muted-foreground hover:text-red-500 transition-colors p-1 rounded-lg hover:bg-red-50 opacity-0 group-hover:opacity-100"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main App ──────────────────────────────────────────────────────────────────
 
 export default function App() {
   const config = useAppConfig();
+  const { history, addToHistory, removeFromHistory, clearHistory } = useFormulaHistory();
 
   const [description, setDescription] = useState("");
   const [context, setContext]         = useState("");
@@ -543,6 +685,7 @@ export default function App() {
         setGenerateError(data.error || `Error ${res.status}. Please try again.`);
       } else {
         setResult(data);
+        addToHistory(description.trim(), data);
         if (!isUnlocked) setPaywallOpen(true);
         setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
       }
@@ -566,6 +709,14 @@ export default function App() {
   function handleLogout() {
     clearLicense();
     setIsUnlocked(false);
+  }
+
+  function handleLoadHistory(entry: HistoryEntry) {
+    setDescription(entry.description);
+    setResult(entry.result);
+    setGenerateError("");
+    setPaywallOpen(!isUnlocked);
+    setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
   }
 
   const canGenerate = description.trim().length >= 5 && !isGenerating;
@@ -765,6 +916,14 @@ export default function App() {
               </button>
             </div>
           )}
+
+          {/* History */}
+          <HistoryPanel
+            history={history}
+            onLoad={handleLoadHistory}
+            onRemove={removeFromHistory}
+            onClear={clearHistory}
+          />
 
           {/* Footer */}
           <div className="flex items-center justify-center gap-4 pt-2 pb-4">
