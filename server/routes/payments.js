@@ -194,7 +194,7 @@ router.get("/check/:key", (req, res) => {
   if (license.expiresAt && new Date(license.expiresAt) < new Date()) {
     return res.json({ valid: false, reason: "expired" });
   }
-  res.json({ valid: true, issuedAt: license.issuedAt ?? null });
+  res.json({ valid: true, issuedAt: license.issuedAt ?? null, expiresAt: license.expiresAt ?? null });
 });
 
 export default router;

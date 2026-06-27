@@ -690,12 +690,20 @@ export default function App() {
   const [model, setModel]             = useState(MODELS[0].value);
 
   // License / paywall
-  const [isUnlocked, setIsUnlocked]     = useState(false);
-  const [licenseExpired, setLicenseExpired] = useState(false);
-  const [paywallOpen, setPaywallOpen]   = useState(false);
-  const [paywallTab, setPaywallTab]     = useState<"pay" | "key">("pay");
-  const [isRenewal, setIsRenewal]       = useState(false);
+  const [isUnlocked, setIsUnlocked]         = useState(false);
+  const [licenseExpired, setLicenseExpired]   = useState(false);
+  const [licenseExpiresAt, setLicenseExpiresAt] = useState<string | null>(null);
+  const [paywallOpen, setPaywallOpen]         = useState(false);
+  const [paywallTab, setPaywallTab]           = useState<"pay" | "key">("pay");
+  const [isRenewal, setIsRenewal]             = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
+
+  // Compute days remaining from expiresAt
+  function daysRemaining(expiresAt: string | null): number | null {
+    if (!expiresAt) return null;
+    const diff = new Date(expiresAt).getTime() - Date.now();
+    return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)));
+  }
 
   // Check for existing license on load
   useEffect(() => {
@@ -704,6 +712,7 @@ export default function App() {
       checkLicenseValid(key).then(status => {
         if (status.valid) {
           setIsUnlocked(true);
+          setLicenseExpiresAt(status.expiresAt ?? null);
         } else {
           clearLicense();
           if (status.expired) setLicenseExpired(true);
@@ -760,6 +769,13 @@ export default function App() {
     setLicenseExpired(false);
     setPaywallOpen(false);
     setIsRenewal(false);
+    // Re-fetch the stored key to get expiresAt from the server
+    const key = getLicense();
+    if (key) {
+      checkLicenseValid(key).then(status => {
+        if (status.valid) setLicenseExpiresAt(status.expiresAt ?? null);
+      });
+    }
   }
 
   function openPaywall(tab: "pay" | "key") {
@@ -777,6 +793,7 @@ export default function App() {
   function handleLogout() {
     clearLicense();
     setIsUnlocked(false);
+    setLicenseExpiresAt(null);
   }
 
   function handleLoadHistory(entry: HistoryEntry) {
@@ -820,10 +837,28 @@ export default function App() {
           {isUnlocked ? (
             <button
               onClick={handleLogout}
-              className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-200 rounded-full px-2.5 py-1 hover:bg-red-50 hover:border-red-200 group transition-colors"
+              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 hover:bg-red-50 hover:border-red-200 group transition-colors border ${
+                (() => { const d = daysRemaining(licenseExpiresAt); return d !== null && d <= 7; })()
+                  ? "bg-amber-50 border-amber-300"
+                  : "bg-emerald-50 border-emerald-200"
+              }`}
             >
-              <Unlock className="w-3 h-3 text-emerald-600 group-hover:text-red-500 transition-colors" />
-              <span className="text-[10px] font-bold text-emerald-700 group-hover:text-red-600 transition-colors">Licensed</span>
+              <Unlock className={`w-3 h-3 group-hover:text-red-500 transition-colors ${
+                (() => { const d = daysRemaining(licenseExpiresAt); return d !== null && d <= 7; })()
+                  ? "text-amber-600" : "text-emerald-600"
+              }`} />
+              <span className={`text-[10px] font-bold group-hover:text-red-600 transition-colors ${
+                (() => { const d = daysRemaining(licenseExpiresAt); return d !== null && d <= 7; })()
+                  ? "text-amber-700" : "text-emerald-700"
+              }`}>
+                {(() => {
+                  const d = daysRemaining(licenseExpiresAt);
+                  if (d === null) return "Licensed";
+                  if (d === 0) return "Expires today";
+                  if (d === 1) return "1d left";
+                  return d <= 7 ? `${d}d left` : `Licensed · ${d}d`;
+                })()}
+              </span>
             </button>
           ) : licenseExpired ? (
             <button

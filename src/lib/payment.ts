@@ -57,6 +57,7 @@ export interface LicenseStatus {
   valid: boolean;
   expired: boolean;
   issuedAt?: string | null;
+  expiresAt?: string | null;
 }
 
 export async function checkLicenseValid(licenseKey: string): Promise<LicenseStatus> {
@@ -64,7 +65,7 @@ export async function checkLicenseValid(licenseKey: string): Promise<LicenseStat
     const res = await fetch(apiUrl(`/check/${encodeURIComponent(licenseKey)}`));
     if (!res.ok) return { valid: false, expired: false };
     const data = await res.json();
-    if (data.valid) return { valid: true, expired: false, issuedAt: data.issuedAt ?? null };
+    if (data.valid) return { valid: true, expired: false, issuedAt: data.issuedAt ?? null, expiresAt: data.expiresAt ?? null };
     if (data.reason === "expired") return { valid: false, expired: true };
     return { valid: false, expired: false };
   } catch {
