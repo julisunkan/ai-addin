@@ -1056,6 +1056,15 @@ export default function App() {
         </div>
       </div>
 
+      {/* Footer Links */}
+      <div className="shrink-0 flex items-center justify-center gap-3 py-1.5 bg-white border-t border-border/50">
+        <a href="/eula"    target="_blank" rel="noopener noreferrer" className="text-[10px] text-muted-foreground hover:text-indigo-600 transition-colors">EULA</a>
+        <span className="text-[10px] text-border">·</span>
+        <a href="/privacy" target="_blank" rel="noopener noreferrer" className="text-[10px] text-muted-foreground hover:text-indigo-600 transition-colors">Privacy</a>
+        <span className="text-[10px] text-border">·</span>
+        <a href="/support" target="_blank" rel="noopener noreferrer" className="text-[10px] text-muted-foreground hover:text-indigo-600 transition-colors">Support</a>
+      </div>
+
       {/* Bottom Navigation */}
       <nav className="shrink-0 border-t border-border bg-white">
         <div className="flex">
