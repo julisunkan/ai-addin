@@ -28,19 +28,19 @@ function requireAdmin(req, res, next) {
 // POST /api/tickets  — submit a new support ticket (public)
 router.post("/", (req, res) => {
   const { name, email, licenseKey, category, subject, message } = req.body || {};
-  if (!name || !email || !subject || !message) {
-    return res.status(400).json({ error: "name, email, subject, and message are required." });
+  if (!email || !message) {
+    return res.status(400).json({ error: "email and message are required." });
   }
   if (!email.includes("@")) {
     return res.status(400).json({ error: "A valid email address is required." });
   }
-  if (message.trim().length < 20) {
-    return res.status(400).json({ error: "Please provide more detail in your message (at least 20 characters)." });
+  if (message.trim().length < 10) {
+    return res.status(400).json({ error: "Please provide more detail in your message (at least 10 characters)." });
   }
 
   const ticket = {
     id: "TKT-" + randomBytes(5).toString("hex").toUpperCase(),
-    name: String(name).trim().slice(0, 100),
+    name: name ? String(name).trim().slice(0, 100) : null,
     email: String(email).trim().toLowerCase(),
     licenseKey: licenseKey ? String(licenseKey).trim() : null,
     category: category || "general",

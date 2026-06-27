@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import {
   KeyRound, LogOut, RefreshCw, ShieldCheck, Copy, Check,
   Save, Eye, EyeOff, Download, AlertCircle, CheckCircle2,
-  Users, DollarSign, Activity, BarChart3, Bot, CreditCard, Palette, Zap
+  Users, DollarSign, Activity, BarChart3, Bot, CreditCard, Palette, Zap,
+  MessageSquare, ChevronDown, ChevronUp, Trash2, Send, X
 } from "lucide-react";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
@@ -677,9 +678,285 @@ function SettingsTab({ pw, settings, onSaved }: { pw: string; settings: Settings
   );
 }
 
+// ── Tickets Tab ───────────────────────────────────────────────────────────────
+
+interface Ticket {
+  id:         string;
+  name:       string | null;
+  email:      string;
+  licenseKey: string | null;
+  category:   string;
+  subject:    string;
+  message:    string;
+  status:     "open" | "resolved" | "closed";
+  createdAt:  string;
+  adminReply: string | null;
+  repliedAt:  string | null;
+}
+
+const STATUS_COLORS: Record<string, string> = {
+  open:     "bg-amber-100 text-amber-700 border-amber-200",
+  resolved: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  closed:   "bg-gray-100 text-gray-500 border-gray-200",
+};
+
+function TicketsTab({ pw }: { pw: string }) {
+  const [tickets, setTickets]       = useState<Ticket[]>([]);
+  const [total, setTotal]           = useState(0);
+  const [loading, setLoading]       = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [expanded, setExpanded]     = useState<string | null>(null);
+  const [replyText, setReplyText]   = useState<Record<string, string>>({});
+  const [replying, setReplying]     = useState<string | null>(null);
+  const [deleting, setDeleting]     = useState<string | null>(null);
+  const [saving, setSaving]         = useState<string | null>(null);
+
+  async function load() {
+    setLoading(true);
+    const query = filterStatus !== "all" ? `?status=${filterStatus}` : "";
+    const res = await fetch(`${API_BASE}/api/tickets${query}`, { headers: { "x-admin-password": pw } });
+    if (res.ok) {
+      const data = await res.json();
+      setTickets(data.tickets);
+      setTotal(data.total);
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => { load(); }, [filterStatus]);
+
+  async function sendReply(ticket: Ticket) {
+    const reply = replyText[ticket.id]?.trim();
+    if (!reply) return;
+    setReplying(ticket.id);
+    const res = await fetch(`${API_BASE}/api/tickets/${ticket.id}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": pw },
+      body:    JSON.stringify({ adminReply: reply }),
+    });
+    setReplying(null);
+    if (res.ok) {
+      setReplyText(r => ({ ...r, [ticket.id]: "" }));
+      load();
+    }
+  }
+
+  async function updateStatus(id: string, status: string) {
+    setSaving(id);
+    await fetch(`${API_BASE}/api/tickets/${id}`, {
+      method:  "PATCH",
+      headers: { "Content-Type": "application/json", "x-admin-password": pw },
+      body:    JSON.stringify({ status }),
+    });
+    setSaving(null);
+    load();
+  }
+
+  async function deleteTicket(id: string) {
+    if (!confirm("Delete this ticket? This cannot be undone.")) return;
+    setDeleting(id);
+    await fetch(`${API_BASE}/api/tickets/${id}`, {
+      method: "DELETE", headers: { "x-admin-password": pw },
+    });
+    setDeleting(null);
+    if (expanded === id) setExpanded(null);
+    load();
+  }
+
+  const openCount     = tickets.filter(t => t.status === "open").length;
+  const resolvedCount = tickets.filter(t => t.status === "resolved").length;
+
+  return (
+    <div className="space-y-4">
+      {/* Header row */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <h3 className="text-base font-semibold">Support Tickets</h3>
+          <div className="flex gap-2">
+            {openCount > 0 && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                {openCount} open
+              </span>
+            )}
+            {resolvedCount > 0 && (
+              <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+                {resolvedCount} resolved
+              </span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          {/* Filter */}
+          <select
+            value={filterStatus}
+            onChange={e => setFilterStatus(e.target.value)}
+            className="rounded-lg border border-input bg-background px-2.5 py-1.5 text-xs font-medium focus:outline-none"
+            data-testid="select-ticket-filter"
+          >
+            <option value="all">All ({total})</option>
+            <option value="open">Open</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
+          <Button variant="outline" size="sm" onClick={load} disabled={loading}>
+            <RefreshCw className={`w-4 h-4 mr-1 ${loading ? "animate-spin" : ""}`} /> Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Empty state */}
+      {!loading && tickets.length === 0 && (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-14 text-center gap-3">
+            <MessageSquare className="w-10 h-10 text-indigo-200" />
+            <p className="text-sm font-semibold text-muted-foreground">No tickets yet</p>
+            <p className="text-xs text-muted-foreground">Support messages submitted by users will appear here.</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Ticket list */}
+      <div className="space-y-3">
+        {tickets.map(ticket => {
+          const isOpen = expanded === ticket.id;
+          const reply  = replyText[ticket.id] ?? "";
+
+          return (
+            <Card
+              key={ticket.id}
+              data-testid={`card-ticket-${ticket.id}`}
+              className={`overflow-hidden transition-shadow ${isOpen ? "shadow-md" : "shadow-sm"}`}
+            >
+              {/* Ticket header — always visible */}
+              <button
+                onClick={() => setExpanded(isOpen ? null : ticket.id)}
+                className="w-full text-left px-4 py-3.5 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <code className="text-[10px] font-mono font-bold text-muted-foreground">{ticket.id}</code>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${STATUS_COLORS[ticket.status] ?? STATUS_COLORS.closed}`}>
+                        {ticket.status}
+                      </span>
+                      {ticket.adminReply && (
+                        <span className="text-[10px] font-semibold text-indigo-600 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded-full">
+                          replied
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm font-semibold text-foreground truncate">{ticket.subject || "(no subject)"}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      {ticket.email}
+                      {ticket.licenseKey ? <span className="ml-2 font-mono text-[10px] text-indigo-500">{ticket.licenseKey}</span> : null}
+                      <span className="mx-1.5">·</span>
+                      {fmtDate(ticket.createdAt)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0 mt-0.5">
+                    <button
+                      onClick={e => { e.stopPropagation(); deleteTicket(ticket.id); }}
+                      disabled={deleting === ticket.id}
+                      className="text-muted-foreground hover:text-destructive transition-colors disabled:opacity-40 p-1 rounded hover:bg-red-50"
+                      title="Delete ticket"
+                      data-testid={`button-delete-ticket-${ticket.id}`}
+                    >
+                      {deleting === ticket.id ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                    </button>
+                    {isOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
+                  </div>
+                </div>
+              </button>
+
+              {/* Expanded content */}
+              {isOpen && (
+                <div className="border-t border-border">
+                  {/* User message */}
+                  <div className="px-4 py-4 bg-gray-50/50 space-y-3">
+                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">User Message</p>
+                    <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">{ticket.message}</p>
+                  </div>
+
+                  {/* Existing reply */}
+                  {ticket.adminReply && (
+                    <div className="px-4 py-4 bg-indigo-50/50 border-t border-indigo-100 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs font-bold text-indigo-600 uppercase tracking-wider">Your Reply</p>
+                        {ticket.repliedAt && <p className="text-[10px] text-muted-foreground">{fmtDate(ticket.repliedAt)}</p>}
+                      </div>
+                      <p className="text-sm text-indigo-900 leading-relaxed whitespace-pre-wrap">{ticket.adminReply}</p>
+                    </div>
+                  )}
+
+                  {/* Actions */}
+                  <div className="px-4 py-4 border-t border-border space-y-3">
+                    {/* Status control */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-muted-foreground">Status:</span>
+                      {(["open", "resolved", "closed"] as const).map(s => (
+                        <button
+                          key={s}
+                          onClick={() => updateStatus(ticket.id, s)}
+                          disabled={saving === ticket.id || ticket.status === s}
+                          data-testid={`button-status-${ticket.id}-${s}`}
+                          className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors disabled:cursor-default ${
+                            ticket.status === s
+                              ? STATUS_COLORS[s]
+                              : "bg-white text-muted-foreground border-border hover:bg-gray-50"
+                          }`}
+                        >
+                          {saving === ticket.id ? "…" : s}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Reply box */}
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        {ticket.adminReply ? "Update Reply" : "Write a Reply"}
+                        <span className="font-normal ml-1">(note: reply is stored but not emailed automatically)</span>
+                      </p>
+                      <textarea
+                        value={reply}
+                        onChange={e => setReplyText(r => ({ ...r, [ticket.id]: e.target.value }))}
+                        placeholder="Type your reply to the user…"
+                        rows={3}
+                        data-testid={`input-reply-${ticket.id}`}
+                        className="w-full rounded-lg border border-input bg-background px-3 py-2.5 text-sm focus:outline-none focus:border-indigo-500 transition-colors resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => sendReply(ticket)}
+                          disabled={!reply.trim() || replying === ticket.id}
+                          className="gap-2"
+                          data-testid={`button-reply-${ticket.id}`}
+                        >
+                          {replying === ticket.id
+                            ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Saving…</>
+                            : <><Send className="w-3.5 h-3.5" /> Save Reply & Mark Resolved</>}
+                        </Button>
+                        {reply && (
+                          <Button size="sm" variant="ghost" onClick={() => setReplyText(r => ({ ...r, [ticket.id]: "" }))}>
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ── Main Admin Page ────────────────────────────────────────────────────────────
 
-type Tab = "overview" | "licenses" | "settings";
+type Tab = "overview" | "licenses" | "settings" | "tickets";
 
 export default function AdminPage() {
   const [pw, setPw]             = useState<string | null>(sessionStorage.getItem("admin_pw"));
@@ -711,10 +988,11 @@ export default function AdminPage() {
 
   if (!pw) return <LoginScreen onLogin={handleLogin} />;
 
-  const TABS: { id: Tab; label: string; icon: React.ElementType }[] = [
-    { id: "overview",  label: "Overview",  icon: BarChart3  },
-    { id: "licenses",  label: "Licenses",  icon: KeyRound   },
-    { id: "settings",  label: "Settings",  icon: Zap        },
+  const TABS: { id: Tab; label: string; icon: React.ElementType; badge?: number }[] = [
+    { id: "overview",  label: "Overview",  icon: BarChart3     },
+    { id: "licenses",  label: "Licenses",  icon: KeyRound      },
+    { id: "tickets",   label: "Support",   icon: MessageSquare },
+    { id: "settings",  label: "Settings",  icon: Zap           },
   ];
 
   return (
@@ -735,10 +1013,10 @@ export default function AdminPage() {
             <LogOut className="w-4 h-4" /> Logout
           </button>
         </div>
-        <div className="max-w-4xl mx-auto px-4 flex gap-1 pb-0">
+        <div className="max-w-4xl mx-auto px-4 flex gap-1 pb-0 overflow-x-auto">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${tab === t.id ? "border-indigo-600 text-indigo-700" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${tab === t.id ? "border-indigo-600 text-indigo-700" : "border-transparent text-muted-foreground hover:text-foreground"}`}>
               <t.icon className="w-4 h-4" /> {t.label}
             </button>
           ))}
@@ -748,6 +1026,7 @@ export default function AdminPage() {
       <main className="max-w-4xl mx-auto px-4 py-6">
         {tab === "overview"  && <OverviewTab pw={pw} />}
         {tab === "licenses"  && <LicensesTab pw={pw} />}
+        {tab === "tickets"   && <TicketsTab  pw={pw} />}
         {tab === "settings"  && settings && (
           <SettingsTab pw={pw} settings={settings} onSaved={() => loadSettings(pw)} />
         )}
