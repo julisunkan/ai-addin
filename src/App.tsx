@@ -701,8 +701,7 @@ export default function App() {
     }
   }, []);
 
-  const handleGenerate = useCallback(async () => {
-    if (!description.trim()) return;
+  const runGenerate = useCallback(async (prompt: string) => {
     setIsGenerating(true);
     setGenerateError("");
     setResult(null);
@@ -713,7 +712,7 @@ export default function App() {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({
-          description: description.trim(),
+          description: prompt,
           context: context.trim() || undefined,
           model: isUnlocked ? model : undefined,
         }),
@@ -723,7 +722,7 @@ export default function App() {
         setGenerateError(data.error || `Error ${res.status}. Please try again.`);
       } else {
         setResult(data);
-        addToHistory(description.trim(), data);
+        addToHistory(prompt, data);
         if (!isUnlocked) setPaywallOpen(true);
         setTimeout(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 100);
       }
@@ -732,7 +731,18 @@ export default function App() {
     } finally {
       setIsGenerating(false);
     }
-  }, [description, context, isUnlocked, model]);
+  }, [context, isUnlocked, model, addToHistory]);
+
+  const handleGenerate = useCallback(() => {
+    if (!description.trim()) return;
+    runGenerate(description.trim());
+  }, [description, runGenerate]);
+
+  const handleGenerateWithPrompt = useCallback((prompt: string) => {
+    setDescription(prompt);
+    setActiveTab("generate");
+    runGenerate(prompt);
+  }, [runGenerate]);
 
   function handleUnlocked() {
     setIsUnlocked(true);
@@ -759,10 +769,7 @@ export default function App() {
   }
 
   function handleSelectTemplate(prompt: string) {
-    setDescription(prompt);
-    setResult(null);
-    setGenerateError("");
-    setActiveTab("generate");
+    handleGenerateWithPrompt(prompt);
   }
 
   const canGenerate = description.trim().length >= 5 && !isGenerating;
@@ -912,7 +919,7 @@ export default function App() {
                       {QUICK_EXAMPLES.map(ex => (
                         <button
                           key={ex}
-                          onClick={() => setDescription(`Help me ${ex.toLowerCase()}`)}
+                          onClick={() => handleGenerateWithPrompt(`Help me ${ex.toLowerCase()}`)}
                           className="text-xs text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg px-3 py-1.5 text-left transition-colors border border-transparent hover:border-indigo-100"
                         >
                           → {ex}
@@ -938,15 +945,30 @@ export default function App() {
                 </div>
               )}
 
-              {/* Loading skeleton */}
+              {/* Generating animation */}
               {isGenerating && (
-                <div className="space-y-3 animate-pulse">
-                  <div className="h-4 bg-gray-200 rounded w-1/3" />
-                  <div className="h-14 bg-indigo-100 rounded-xl" />
-                  <div className="h-4 bg-gray-200 rounded w-1/4 mt-4" />
-                  <div className="h-20 bg-emerald-50 rounded-xl" />
-                  <div className="h-4 bg-gray-200 rounded w-1/3 mt-4" />
-                  <div className="h-24 bg-gray-100 rounded-xl" />
+                <div className="flex flex-col items-center justify-center py-10 space-y-5">
+                  <div className="relative w-16 h-16">
+                    <div className="absolute inset-0 rounded-2xl bg-indigo-100 animate-ping opacity-40" />
+                    <div className="relative w-16 h-16 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center">
+                      <Sparkles className="w-7 h-7 text-indigo-500 animate-spin" style={{ animationDuration: "2s" }} />
+                    </div>
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-bold text-foreground">Generating Formula…</p>
+                    <p className="text-xs text-muted-foreground">Powered by Groq AI</p>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                    <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                  </div>
+                  <div className="w-full space-y-2.5 pt-2 animate-pulse">
+                    <div className="h-3 bg-gray-200 rounded-full w-1/3" />
+                    <div className="h-12 bg-indigo-100 rounded-xl" />
+                    <div className="h-3 bg-gray-200 rounded-full w-1/4 mt-3" />
+                    <div className="h-16 bg-emerald-50 rounded-xl" />
+                  </div>
                 </div>
               )}
 
