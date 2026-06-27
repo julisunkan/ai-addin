@@ -4,8 +4,9 @@ import {
   ChevronDown, ChevronUp, Loader2, AlertCircle, X,
   KeyRound, CreditCard, Shield, Zap, TableIcon,
   Clock, Trash2, RotateCcw, Star, Wrench, BookOpen,
-  ChevronRight, BarChart2
+  ChevronRight, BarChart2, LogOut
 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { getLicense, setLicense, clearLicense, checkLicenseValid, fetchPaymentConfig, verifyPayment, activateLicenseKey } from "./lib/payment";
 import { exportToTxt, exportToPdf, type FormulaResult } from "./lib/formulaExport";
 import { useAppConfig } from "./context/AppConfigContext";
@@ -696,6 +697,8 @@ export default function App() {
   const [paywallOpen, setPaywallOpen]         = useState(false);
   const [paywallTab, setPaywallTab]           = useState<"pay" | "key">("pay");
   const [isRenewal, setIsRenewal]             = useState(false);
+  const [keyPopoverOpen, setKeyPopoverOpen]   = useState(false);
+  const [licenseKeyCopied, setLicenseKeyCopied] = useState(false);
   const resultRef = useRef<HTMLDivElement>(null);
 
   // Compute days remaining from expiresAt
@@ -835,31 +838,70 @@ export default function App() {
         </div>
         <div className="flex items-center gap-2">
           {isUnlocked ? (
-            <button
-              onClick={handleLogout}
-              className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 hover:bg-red-50 hover:border-red-200 group transition-colors border ${
-                (() => { const d = daysRemaining(licenseExpiresAt); return d !== null && d <= 7; })()
-                  ? "bg-amber-50 border-amber-300"
-                  : "bg-emerald-50 border-emerald-200"
-              }`}
-            >
-              <Unlock className={`w-3 h-3 group-hover:text-red-500 transition-colors ${
-                (() => { const d = daysRemaining(licenseExpiresAt); return d !== null && d <= 7; })()
-                  ? "text-amber-600" : "text-emerald-600"
-              }`} />
-              <span className={`text-[10px] font-bold group-hover:text-red-600 transition-colors ${
-                (() => { const d = daysRemaining(licenseExpiresAt); return d !== null && d <= 7; })()
-                  ? "text-amber-700" : "text-emerald-700"
-              }`}>
-                {(() => {
-                  const d = daysRemaining(licenseExpiresAt);
-                  if (d === null) return "Licensed";
-                  if (d === 0) return "Expires today";
-                  if (d === 1) return "1d left";
-                  return d <= 7 ? `${d}d left` : `Licensed · ${d}d`;
-                })()}
-              </span>
-            </button>
+            <Popover open={keyPopoverOpen} onOpenChange={setKeyPopoverOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 transition-colors border ${
+                    (() => { const d = daysRemaining(licenseExpiresAt); return d !== null && d <= 7; })()
+                      ? "bg-amber-50 border-amber-300 hover:bg-amber-100"
+                      : "bg-emerald-50 border-emerald-200 hover:bg-emerald-100"
+                  }`}
+                >
+                  <Unlock className={`w-3 h-3 ${
+                    (() => { const d = daysRemaining(licenseExpiresAt); return d !== null && d <= 7; })()
+                      ? "text-amber-600" : "text-emerald-600"
+                  }`} />
+                  <span className={`text-[10px] font-bold ${
+                    (() => { const d = daysRemaining(licenseExpiresAt); return d !== null && d <= 7; })()
+                      ? "text-amber-700" : "text-emerald-700"
+                  }`}>
+                    {(() => {
+                      const d = daysRemaining(licenseExpiresAt);
+                      if (d === null) return "Licensed";
+                      if (d === 0) return "Expires today";
+                      if (d === 1) return "1d left";
+                      return d <= 7 ? `${d}d left` : `Licensed · ${d}d`;
+                    })()}
+                  </span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 p-3 space-y-3">
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1">Your License Key</p>
+                  <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-2">
+                    <code className="flex-1 text-[11px] font-mono text-foreground truncate select-all">
+                      {getLicense() ?? "—"}
+                    </code>
+                    <button
+                      onClick={() => {
+                        const key = getLicense();
+                        if (!key) return;
+                        navigator.clipboard.writeText(key);
+                        setLicenseKeyCopied(true);
+                        setTimeout(() => setLicenseKeyCopied(false), 2000);
+                      }}
+                      className="shrink-0 flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-md bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
+                    >
+                      {licenseKeyCopied ? <><Check className="w-3 h-3" /> Copied</> : <><Copy className="w-3 h-3" /> Copy</>}
+                    </button>
+                  </div>
+                  {licenseExpiresAt && (
+                    <p className="text-[10px] text-muted-foreground mt-1.5">
+                      Expires {new Date(licenseExpiresAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                    </p>
+                  )}
+                </div>
+                <div className="border-t border-border pt-2">
+                  <button
+                    onClick={() => { setKeyPopoverOpen(false); handleLogout(); }}
+                    className="w-full flex items-center gap-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg px-2 py-1.5 transition-colors"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    Sign out (removes license from this device)
+                  </button>
+                </div>
+              </PopoverContent>
+            </Popover>
           ) : licenseExpired ? (
             <button
               onClick={openRenewal}
