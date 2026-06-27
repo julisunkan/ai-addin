@@ -6,15 +6,15 @@
 
   <Id>977e359e-268e-40f4-8e69-eb4d827c2806</Id>
 
-  <Version>1.0.0.0</Version>
+  <Version>2.0.0.0</Version>
 
-  <ProviderName>Bank Analyzer Pro</ProviderName>
+  <ProviderName>AI Formula Generator</ProviderName>
 
   <DefaultLocale>en-US</DefaultLocale>
 
-  <DisplayName DefaultValue="Bank Statement Analyzer"/>
+  <DisplayName DefaultValue="AI Formula Generator"/>
 
-  <Description DefaultValue="Analyze bank statements and categorize transactions."/>
+  <Description DefaultValue="Describe what you want in plain English and get the perfect Excel formula instantly, powered by AI."/>
 
   <IconUrl DefaultValue="https://f9c54bff-d028-4dbd-bef2-94a4294151b9-00-226leqeczdzxf.worf.replit.dev/icon-32.png"/>
 

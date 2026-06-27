@@ -2,13 +2,6 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
-export interface Plan {
-  id: string;
-  label: string;
-  price: number;
-  days: number;
-}
-
 export interface AppConfig {
   appearance: {
     name: string;
@@ -18,28 +11,19 @@ export interface AppConfig {
     radius: string;
   };
   features: { proEnabled: boolean };
-  payment: { network: string };
-  plans: Plan[];
+  payment:  { network: string };
 }
-
-const DEFAULT_PLANS: Plan[] = [
-  { id: "monthly",   label: "Monthly",  price: 5,  days: 30  },
-  { id: "quarterly", label: "3-Month",  price: 12, days: 90  },
-  { id: "biannual",  label: "6-Month",  price: 20, days: 180 },
-  { id: "annual",    label: "1-Year",   price: 35, days: 365 },
-];
 
 const DEFAULT_CONFIG: AppConfig = {
   appearance: {
-    name: "Bank Statement Analyzer",
-    tagline: "Analyze transactions, categorize spending, and export summary reports.",
-    primaryColor: "#3b82f6",
-    accentColor: "#16a34a",
-    radius: "6px",
+    name: "AI Formula Generator",
+    tagline: "Describe what you want in plain English — get the perfect Excel formula instantly.",
+    primaryColor: "#6366f1",
+    accentColor:  "#10b981",
+    radius: "8px",
   },
   features: { proEnabled: true },
-  payment: { network: "tron" },
-  plans: DEFAULT_PLANS,
+  payment:  { network: "tron" },
 };
 
 function hexToHsl(hex: string): string {
@@ -65,10 +49,10 @@ function applyTheme(config: AppConfig) {
   const { primaryColor, accentColor, radius } = config.appearance;
   const root = document.documentElement;
   root.style.setProperty("--primary", hexToHsl(primaryColor));
-  root.style.setProperty("--ring", hexToHsl(primaryColor));
-  root.style.setProperty("--accent", hexToHsl(accentColor));
+  root.style.setProperty("--ring",    hexToHsl(primaryColor));
+  root.style.setProperty("--accent",  hexToHsl(accentColor));
   root.style.setProperty("--success", hexToHsl(accentColor));
-  root.style.setProperty("--radius", radius);
+  root.style.setProperty("--radius",  radius);
   document.title = config.appearance.name;
 }
 
@@ -79,14 +63,13 @@ export function AppConfigProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     fetch(`${API_BASE}/api/config`)
-      .then((r) => r.ok ? r.json() : null)
-      .then((data) => {
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
         if (!data) return;
         const merged: AppConfig = {
           appearance: { ...DEFAULT_CONFIG.appearance, ...data.appearance },
           features:   { ...DEFAULT_CONFIG.features,   ...data.features   },
           payment:    { ...DEFAULT_CONFIG.payment,    ...data.payment    },
-          plans:      Array.isArray(data.plans) && data.plans.length ? data.plans : DEFAULT_PLANS,
         };
         setConfig(merged);
         applyTheme(merged);

@@ -12,22 +12,13 @@ const router = Router();
 
 function requireAdmin(req, res, next) {
   const password = process.env.ADMIN_PASSWORD;
-  if (!password) {
-    return res.status(503).json({ error: "ADMIN_PASSWORD not configured on server" });
-  }
-  const provided = req.headers["x-admin-password"];
-  if (provided !== password) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+  if (!password) return res.status(503).json({ error: "ADMIN_PASSWORD not configured on server" });
+  if (req.headers["x-admin-password"] !== password) return res.status(401).json({ error: "Unauthorized" });
   next();
 }
 
 function loadLicenses() {
-  try {
-    return JSON.parse(readFileSync(LICENSES_FILE, "utf8"));
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(readFileSync(LICENSES_FILE, "utf8")); } catch { return []; }
 }
 
 function saveLicenses(licenses) {
@@ -35,19 +26,8 @@ function saveLicenses(licenses) {
 }
 
 function generateLicenseKey() {
-  return "BSA-" + randomBytes(12).toString("hex").toUpperCase();
+  return "AIFG-" + randomBytes(12).toString("hex").toUpperCase();
 }
-
-// GET /api/admin/licenses
-router.get("/licenses", requireAdmin, (req, res) => {
-  const licenses = loadLicenses();
-  res.json({
-    total: licenses.length,
-    licenses: licenses.sort(
-      (a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime()
-    ),
-  });
-});
 
 function computeExpiresAt(expiryDays) {
   if (!expiryDays || expiryDays <= 0) return null;
@@ -56,7 +36,16 @@ function computeExpiresAt(expiryDays) {
   return d.toISOString();
 }
 
-// POST /api/admin/licenses/generate  — manually issue a license key
+// GET /api/admin/licenses
+router.get("/licenses", requireAdmin, (req, res) => {
+  const licenses = loadLicenses();
+  res.json({
+    total: licenses.length,
+    licenses: licenses.sort((a, b) => new Date(b.issuedAt).getTime() - new Date(a.issuedAt).getTime()),
+  });
+});
+
+// POST /api/admin/licenses/generate
 router.post("/licenses/generate", requireAdmin, (req, res) => {
   const { note, expiryDays } = req.body || {};
   const licenseKey = generateLicenseKey();
@@ -64,8 +53,8 @@ router.post("/licenses/generate", requireAdmin, (req, res) => {
   const licenses = loadLicenses();
   licenses.push({
     licenseKey,
-    txHash: "MANUAL",
-    note: (note || "Admin generated").slice(0, 100),
+    txHash:   "MANUAL",
+    note:     (note || "Admin generated").slice(0, 100),
     issuedAt: new Date().toISOString(),
     ...(expiresAt ? { expiresAt } : {}),
   });
@@ -74,7 +63,7 @@ router.post("/licenses/generate", requireAdmin, (req, res) => {
   res.json({ licenseKey, expiresAt });
 });
 
-// POST /api/admin/licenses/bulk-generate  — generate multiple keys at once
+// POST /api/admin/licenses/bulk-generate
 router.post("/licenses/bulk-generate", requireAdmin, (req, res) => {
   const { count = 1, note, expiryDays } = req.body || {};
   const n = Math.max(1, Math.min(100, parseInt(count) || 1));
@@ -86,65 +75,25 @@ router.post("/licenses/bulk-generate", requireAdmin, (req, res) => {
     const licenseKey = generateLicenseKey();
     licenses.push({
       licenseKey,
-      txHash: "MANUAL",
-      note: (note || "Bulk generated").slice(0, 100),
+      txHash:   "MANUAL",
+      note:     (note || "Bulk generated").slice(0, 100),
       issuedAt: now,
       ...(expiresAt ? { expiresAt } : {}),
     });
     newKeys.push(licenseKey);
   }
   saveLicenses(licenses);
-  console.log(`🔑 Bulk issued ${n} license(s)${note ? ` (${note})` : ""}${expiresAt ? ` expires ${expiresAt}` : ""}`);
+  console.log(`🔑 Bulk issued ${n} license(s)${note ? ` (${note})` : ""}`);
   res.json({ keys: newKeys, count: newKeys.length, expiresAt });
 });
 
-// GET /api/admin/revenue  — aggregated revenue stats
+// GET /api/admin/revenue
 router.get("/revenue", requireAdmin, (req, res) => {
   const licenses = loadLicenses();
-
-  let plans = [];
-  try {
-    const s = JSON.parse(readFileSync(SETTINGS_FILE, "utf8"));
-    plans = Array.isArray(s.plans) ? s.plans : [];
-  } catch {}
-
-  const DEFAULT_PRICES = { monthly: 5, quarterly: 12, biannual: 20, annual: 35 };
-  const DEFAULT_DAYS   = { monthly: 30, quarterly: 90, biannual: 180, annual: 365 };
-
-  function planPrice(planId) {
-    const p = plans.find(x => x.id === planId);
-    return p ? p.price : (DEFAULT_PRICES[planId] ?? 0);
-  }
-  function planDays(planId) {
-    const p = plans.find(x => x.id === planId);
-    return p ? p.days : (DEFAULT_DAYS[planId] ?? 30);
-  }
-
   const now = Date.now();
-
-  // Only paid licenses (not manual) for revenue
-  const paid = licenses.filter(l => l.txHash !== "MANUAL" && l.planId);
-
-  // Total revenue
-  const totalRevenue = paid.reduce((sum, l) => sum + planPrice(l.planId), 0);
-
-  // Active subscribers
+  const paid   = licenses.filter(l => l.txHash !== "MANUAL");
   const active = licenses.filter(l => !l.expiresAt || new Date(l.expiresAt).getTime() > now);
-
-  // MRR: for each active paid license, price/days*30
-  const mrr = active
-    .filter(l => l.txHash !== "MANUAL" && l.planId)
-    .reduce((sum, l) => sum + (planPrice(l.planId) / planDays(l.planId)) * 30, 0);
-
-  // Revenue by plan
-  const byPlan = {};
-  for (const l of paid) {
-    const id = l.planId;
-    if (!byPlan[id]) byPlan[id] = { planId: id, count: 0, revenue: 0 };
-    byPlan[id].count++;
-    byPlan[id].revenue += planPrice(id);
-  }
-  const byPlanArr = Object.values(byPlan).sort((a, b) => b.revenue - a.revenue);
+  const totalRevenue = paid.length * 1; // 1 USDT per license
 
   // Monthly breakdown — last 13 months
   const monthlyMap = {};
@@ -158,36 +107,26 @@ router.get("/revenue", requireAdmin, (req, res) => {
   for (const l of paid) {
     const d = new Date(l.issuedAt);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-    if (monthlyMap[key]) {
-      monthlyMap[key].activations++;
-      monthlyMap[key].revenue += planPrice(l.planId);
-    }
+    if (monthlyMap[key]) { monthlyMap[key].activations++; monthlyMap[key].revenue += 1; }
   }
-  const monthly = Object.values(monthlyMap);
-
-  // With emails
-  const withEmail = licenses.filter(l => l.email).length;
 
   res.json({
-    totalRevenue: Math.round(totalRevenue * 100) / 100,
-    mrr: Math.round(mrr * 100) / 100,
-    totalLicenses: licenses.length,
+    totalRevenue,
+    mrr: 0,
+    totalLicenses:  licenses.length,
     activeLicenses: active.length,
-    paidLicenses: paid.length,
-    withEmail,
-    byPlan: byPlanArr,
-    monthly,
+    paidLicenses:   paid.length,
+    withEmail:      licenses.filter(l => l.email).length,
+    monthly:        Object.values(monthlyMap),
   });
 });
 
-// DELETE /api/admin/licenses/:key  — revoke a license key
+// DELETE /api/admin/licenses/:key
 router.delete("/licenses/:key", requireAdmin, (req, res) => {
   const { key } = req.params;
   const licenses = loadLicenses();
-  const updated = licenses.filter((l) => l.licenseKey !== key);
-  if (updated.length === licenses.length) {
-    return res.status(404).json({ error: "License not found" });
-  }
+  const updated = licenses.filter(l => l.licenseKey !== key);
+  if (updated.length === licenses.length) return res.status(404).json({ error: "License not found" });
   saveLicenses(updated);
   console.log(`🗑  License revoked: ${key}`);
   res.json({ ok: true });
