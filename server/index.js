@@ -8,6 +8,7 @@ import adminRouter from "./routes/admin.js";
 import settingsRouter from "./routes/settings.js";
 import generateRouter from "./routes/generate.js";
 import ticketsRouter from "./routes/tickets.js";
+import visualizeRouter from "./routes/visualize.js";
 import { startExpiryChecker } from "./lib/expiry-checker.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -25,6 +26,7 @@ app.use("/api/admin", settingsRouter);
 app.use("/api/config", settingsRouter);
 app.use("/api/generate", generateRouter);
 app.use("/api/tickets", ticketsRouter);
+app.use("/api/visualize", visualizeRouter);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 

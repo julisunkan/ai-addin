@@ -4,19 +4,20 @@ import {
   ChevronDown, ChevronUp, Loader2, AlertCircle, X,
   KeyRound, CreditCard, Shield, Zap, TableIcon,
   Clock, Trash2, RotateCcw, Star, Wrench, BookOpen,
-  ChevronRight
+  ChevronRight, BarChart2
 } from "lucide-react";
 import { getLicense, setLicense, clearLicense, checkLicenseValid, fetchPaymentConfig, verifyPayment, activateLicenseKey } from "./lib/payment";
 import { exportToTxt, exportToPdf, type FormulaResult } from "./lib/formulaExport";
 import { useAppConfig } from "./context/AppConfigContext";
 import ToolsTab, { MODELS } from "./components/ToolsTab";
 import CategoriesTab from "./components/CategoriesTab";
+import VisualizeTab from "./components/VisualizeTab";
 
 const API_BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type MainTab = "generate" | "tools" | "categories" | "history";
+type MainTab = "generate" | "tools" | "categories" | "history" | "visualize";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -768,10 +769,11 @@ export default function App() {
 
   // ── Bottom Nav config ─────────────────────────────────────────────────────
   const NAV = [
-    { id: "generate" as MainTab,   icon: <Sparkles className="w-5 h-5" />,  label: "Generate" },
-    { id: "tools"    as MainTab,   icon: <Wrench className="w-5 h-5" />,    label: "Tools" },
-    { id: "categories" as MainTab, icon: <BookOpen className="w-5 h-5" />,  label: "Categories" },
-    { id: "history"  as MainTab,   icon: <Clock className="w-5 h-5" />,     label: "History" },
+    { id: "generate"   as MainTab, icon: <Sparkles className="w-5 h-5" />,   label: "Generate" },
+    { id: "tools"      as MainTab, icon: <Wrench className="w-5 h-5" />,     label: "Tools" },
+    { id: "categories" as MainTab, icon: <BookOpen className="w-5 h-5" />,   label: "Categories" },
+    { id: "visualize"  as MainTab, icon: <BarChart2 className="w-5 h-5" />,  label: "Visualize" },
+    { id: "history"    as MainTab, icon: <Clock className="w-5 h-5" />,      label: "History" },
   ];
 
   return (
@@ -814,6 +816,7 @@ export default function App() {
           {activeTab === "generate"   && "Generate Formula"}
           {activeTab === "tools"      && "Premium Tools"}
           {activeTab === "categories" && "Formula Categories"}
+          {activeTab === "visualize"  && "Workbook Visualizer"}
           {activeTab === "history"    && `History (${history.length})`}
         </span>
         {activeTab === "tools" && !isUnlocked && (
@@ -1009,6 +1012,11 @@ export default function App() {
               onSelectTemplate={handleSelectTemplate}
               isLicensed={isUnlocked}
             />
+          )}
+
+          {/* ── VISUALIZE TAB ──────────────────────────────────────── */}
+          {activeTab === "visualize" && (
+            <VisualizeTab />
           )}
 
           {/* ── HISTORY TAB ────────────────────────────────────────── */}
