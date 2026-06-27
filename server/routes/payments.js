@@ -69,10 +69,39 @@ function saveLicense(licenseKey, txHash, email) {
 }
 
 async function verifyTron(txHash, walletAddress) {
+  // Primary: TronScan public API (no key required)
+  try {
+    const scanRes = await fetch(
+      `https://apilist.tronscanapi.com/api/transaction-info?hash=${txHash}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (scanRes.ok) {
+      const tx = await scanRes.json();
+      if (tx && tx.contractRet === "SUCCESS" && Array.isArray(tx.trc20TransferInfo) && tx.trc20TransferInfo.length > 0) {
+        const transfer = tx.trc20TransferInfo[0];
+        const toAddr   = (transfer.to_address || "").toLowerCase();
+        const amount   = Number(transfer.amount_str || transfer.amount || 0) / 1e6;
+        if (toAddr !== walletAddress.toLowerCase()) return { ok: false, reason: "Wrong destination wallet" };
+        if (amount < PRICE_USDT) return { ok: false, reason: `Amount too low: ${amount} USDT (need ${PRICE_USDT})` };
+        return { ok: true };
+      }
+      if (tx && !tx.hash) return { ok: false, reason: "Transaction not found on Tron network" };
+      if (tx && tx.contractRet !== "SUCCESS") return { ok: false, reason: "Transaction not successful" };
+    }
+    console.warn("[verifyTron] TronScan non-OK:", scanRes.status, "— falling back to TronGrid");
+  } catch (e) {
+    console.warn("[verifyTron] TronScan error:", e.message, "— falling back to TronGrid");
+  }
+
+  // Fallback: TronGrid
   const headers = { Accept: "application/json" };
   if (TRONGRID_API_KEY) headers["TRON-PRO-API-KEY"] = TRONGRID_API_KEY;
   const res = await fetch(`https://api.trongrid.io/v1/transactions/${txHash}`, { headers });
-  if (!res.ok) return { ok: false, reason: "TronGrid request failed" };
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error("[verifyTron] TronGrid error:", res.status, body);
+    return { ok: false, reason: `TronGrid request failed (HTTP ${res.status}). Please try again in a moment.` };
+  }
   const json = await res.json();
   const tx = json?.data?.[0];
   if (!tx) return { ok: false, reason: "Transaction not found" };
