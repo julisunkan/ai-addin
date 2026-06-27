@@ -1,5 +1,8 @@
 import express from "express";
 import cors from "cors";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
+import { existsSync } from "fs";
 import paymentsRouter from "./routes/payments.js";
 import adminRouter from "./routes/admin.js";
 import settingsRouter from "./routes/settings.js";
@@ -7,7 +10,10 @@ import generateRouter from "./routes/generate.js";
 import ticketsRouter from "./routes/tickets.js";
 import { startExpiryChecker } from "./lib/expiry-checker.js";
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || process.env.API_PORT || 3001);
+const isProd = process.env.NODE_ENV === "production";
+
 const app = express();
 
 app.use(cors({ origin: true }));
@@ -20,8 +26,18 @@ app.use("/api/config", settingsRouter);
 app.use("/api/generate", generateRouter);
 app.use("/api/tickets", ticketsRouter);
 
-app.get("/", (_req, res) => res.send("AI Formula Generator API is running. Use /api/health to check status."));
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
+
+// In production, serve the Vite-built frontend and handle client-side routing
+if (isProd) {
+  const distPath = join(__dirname, "../dist/public");
+  if (existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get("*", (_req, res) => res.sendFile(join(distPath, "index.html")));
+  }
+} else {
+  app.get("/", (_req, res) => res.send("AI Formula Generator API — dev mode (frontend on port 5000)"));
+}
 
 const HOST = "0.0.0.0";
 
